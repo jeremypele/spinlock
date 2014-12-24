@@ -401,7 +401,7 @@ $(function(){
 
           if ( Math.abs(circles_distance) < 12 && circles_distance !== 0)
             sync(i, j);
-          else if (circles_array[i].rotationDirection !== circles_array[j].rotationDirection && Math.abs(circles_distance) < 12)
+          else if (circles_array[i].rotationDirection !== circles_array[j].rotationDirection && Math.abs(inverted_circles_distance) < 12)
             sync(i, j);
 
         }
