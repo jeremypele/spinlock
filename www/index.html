@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<!--
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+-->
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="format-detection" content="telephone=no" />
+        <!-- WARNING: for iOS 7, remove the width=device-width and height=device-height attributes. See https://issues.apache.org/jira/browse/CB-4323 -->
+        <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, target-densitydpi=device-dpi" />
+        <link rel="stylesheet" type="text/css"  href="css/default.css"/>
+        <script type="text/javascript" src="http://code.jquery.com/jquery.min.js"></script>
+        
+        <title>Spinlock</title>
+    </head>
+    <body>
+        
+        <div id="game_frame" >
+            
+            <div id="splash-screen">
+                <img src="img/logo.png" class="logo"></img>
+                <a class="blink">touch screen to play</a>
+            </div>
+            <!-- End Splash Screen -->
+            <div id="game-screen">
+                <div class="header">
+                    <div class="scores-container">
+                        <div class="score-container scoring">
+                            <p>score</p>
+                            <score>1246</score>
+                        </div>
+                        <div class="best-container scoring">
+                            <p>best</p>
+                            <score>3654</score>
+                        </div>
+                        <div class="clearfix"></div>
+                    </div>
+                    <div class="new-game-container">
+                        <a class="new-game" href="javascript:game.start()">new</a>
+                        <a class="new-game" href="javascript:game.togglePause()">pause</a>
+                    </div>
+                    <div id="timer"></div>
+                </div>
+                <canvas id="spinlocker" width="320" height="300" >
+                Your browser does not support the HTML5 canvas tag.
+                </canvas>
+                
+                <div class='footer'>
+                    <div class="try-left">
+                        Il vous reste :
+                        <div id="countdown"></div>
+                    </div>
+                </div>
+                <div id="gameover" style="display: none; position: absolute; top: 50%; left: 50%; text-align: center; line-height: 100px; width: 200px; height: 100px; margin-left: -100px; margin-top: -50px; background-color: #88ddfc; border: 3px solid #339fd6;">
+                    You lose!
+                    <a href="javascript:game.new()">Retry?</a>
+                </div>
+                <div id="won" style="display: none; position: absolute; top: 50%; left: 50%; text-align: center; line-height: 100px; width: 200px; height: 100px; margin-left: -100px; margin-top: -50px; background-color: #bfffc7; border: 3px solid #49dd69;">
+                    You win!
+                    <a href="javascript:game.nextLevel()">Next level?</a>
+                </div>
+            </div>
+            <!-- End Game Screen -->
+        </div>
+
+        <script type="text/javascript" src="cordova.js"></script>
+        <script type="text/javascript" src="js/index.js"></script>
+        <script type="text/javascript" src="js/game.js"></script>
+        <script type="text/javascript">
+            app.initialize();
+        </script>
+
+    </body>
+</html>
