@@ -4,6 +4,7 @@ $(function(){
     // GLOBALS
     var circles_array = [],
         sync_array_bloc = [],
+        flatten_sync_array_bloc = [],
         refresh_interval_id,
         timer_interval,
         colors = [ '#FE6203', '#ECC306', '#F87E59', '#F4B174', '#C0B0A3'];
@@ -150,12 +151,13 @@ $(function(){
         spinLock.setCountDown(5);
         spinLock.setTimer(true);
         sync_array_bloc = [];
+        flatten_sync_array_bloc = [];
       },
       introLevel: function(text) {
           context.clearRect(0, 0, canvas.width, canvas.height);
           context.save();
 
-          context.font = "60px Verdana";
+          context.font = "50px Verdana";
           context.fillStyle = "black";
           context.textAlign = "center"; // center horizontally
           context.textBaseline = "middle"; // vertically 
@@ -230,31 +232,71 @@ $(function(){
 
         circles_array.forEach(function (value, index, array) {
           var options = { radius: value.radius, 
-                          e_angle: 2 * Math.PI * 0.9,
-                          stroke: colors[index % colors.length],
-                          blurred: value.blurred };
+                          e_angle: value.close ? (2 * Math.PI) : (2 * Math.PI * 0.9),
+                          stroke: value.hidden ? 'rgba(0, 0, 0, 0)' : colors[index % colors.length],
+                          blurred: value.blurred,
+                          death: value.death };
           
           toolBox.rotatingCircle(data.context, spinLock.timer, value, options);
         });
 
         context.restore();
       },
-      addTrap: function(){
+      addTrap: function(trap){
+
+        var getFreeCircle = function() {
+          // Difference between syncs circles
+          var free_circles = circles_array.diff( flatten_sync_array_bloc ),
+              circle = free_circles[Math.floor(Math.random() * free_circles.length)];
+
+          return circle;
+        }
+
+        var c = getFreeCircle();
+
         switch(trap){
           case 'unlock':
-          // > Piège 1 "Un-bind" : 2 cercles se désolidarisent après un temps compris entre 5 et 10 secondes.
+            // > Piège 1 "Un-bind" : 2 cercles se désolidarisent après un temps compris entre 5 et 10 secondes.
+            var sync_index = Math.floor(Math.random() * sync_array_bloc.length),
+                sync_index_to_dissociate = Math.floor(Math.random() * sync_array_bloc[sync_index].length),
+                circle_to_dissociate = sync_array_bloc[sync_index][sync_index_to_dissociate];
+
+            // Remove circle from bloc
+            sync_array_bloc[sync_index] = sync_array_bloc[sync_index].splice(sync_index_to_dissociate, 1);
+
+            circles_array[circle_to_dissociate].rotationDirection = -circles_array[circle_to_dissociate].rotationDirection;
+
+            // If only one circle left in bloc, there's no bloc to sync
+            if (sync_array_bloc[sync_index].length == 1) 
+              sync_array_bloc.splice(sync_index, 1);
+            
+            spinLock.flattenSyncCircles();
             break;
           case 'twist':
-          // > Piège 2 "Surprise, motherfck**** !" : un cercle change de sens de roration. Ce changement doit être piégeux, c’est-à-dire opérer moins d'1,5 seconde avant un alignement potentiel
+            // > Piège 2 "Surprise, motherfck**** !" : un cercle change de sens de roration. Ce changement doit être piégeux, c’est-à-dire opérer moins d'1,5 seconde avant un alignement potentiel
+            c.rotationDirection = -c.rotationDirection;
             break;
           case 'close':
-          // > Piège 3 "Locked-up !" : Un cercle se referme pour 5 secondes
+            // > Piège 3 "Locked-up !" : Un cercle se referme pour 5 secondes
+            c.close = true;
+            setTimeout(function(){
+              c.close = false;
+            }, 5000);
+
             break;
           case 'ghost':
-          // > Piège 4 "Ghost Ring" : Un cercle disparaît pendant 5 secondes
+            // > Piège 4 "Ghost Ring" : Un cercle disparaît pendant 5 secondes
+            c.hidden = true;
+            setTimeout(function(){
+              c.hidden = false;
+            }, 5000);
             break;
           case 'death':
-          // > Piège 5 : "Death Ring" : Aligner ce cercle (visuel barbellés avec les autres fait perdre une tentative)
+            // > Piège 5 : "Death Ring" : Aligner ce cercle (visuel barbellés avec les autres fait perdre une tentative)
+            c.death = true;
+            setTimeout(function(){
+              c.death = false;
+            }, 5000);
             break;
         }
       },
@@ -269,9 +311,13 @@ $(function(){
         }
 
         return win_flag;
+      },
+      flattenSyncCircles: function(){
+        flatten_sync_array_bloc = [].concat.apply([],sync_array_bloc);
       }
     }
-    
+
+
 
     /*
      * Circle object
@@ -303,7 +349,9 @@ $(function(){
               ) ;
     }
 
-
+    /*
+     * User relatives
+     */
     var User = {
       last_tap: null,
       score: 0,
@@ -312,10 +360,16 @@ $(function(){
       basePoints: 200,
       checkPoints: 4,
       restore: function(){
+        User.reset();
         User.max_score = storage.get('User.max_score') || 0 ;
         User.updateScores();
 
         User.checkPoints = storage.get('User.checkPoints') || User.checkPoints;
+      },
+      reset: function(){
+        User.score = 0;
+        User.last_tap = null;
+        User.updateScores();
       },
       updateScores: function() {
         $('.score-container score').html(User.score);
@@ -396,25 +450,37 @@ $(function(){
         //ctx.arc(x,                y,                r,                 sAngle,         eAngle,     counterclockwise);
         ctx.arc(options.center_x, options.center_y, options.radius, options.s_angle, options.e_angle, false);
         ctx.fillStyle = options.fill;
-        ctx.fill();
-        ctx.lineWidth = options.line_width;
+        ctx.strokeStyle = options.stroke;
 
-        if (typeof options != "undefined" && options.blurred) {// add blur on lock circle to indicate the event
-          ctx.shadowColor = '#0099FF';
-          ctx.shadowBlur = 5;
-          ctx.shadowOffsetX = 0;
-          ctx.shadowOffsetY = 0;
+        if (typeof options != "undefined"){
+          if (options.blurred) {// add blur on lock circle to indicate the event
+            ctx.shadowColor = '#0099FF';
+            ctx.shadowBlur = 5;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+          }
+          if (options.death){
+            // var img = new Image();
+            // img.src = 'https://0.s3.envato.com/files/258064.jpg';
+            // img.onload = function(){
+
+            //   // create pattern
+            //   var ptrn = ctx.createPattern(img,'repeat');
+            //   ctx.fillStyle = ptrn;
+            //   ctx.strokeStyle = ptrn;
+            // }
+
+            ctx.strokeStyle = '#000';
+          }
         }
 
-        ctx.strokeStyle = options.stroke;
+        ctx.fill();
+        ctx.lineWidth = options.line_width;
         ctx.stroke();
       }
     };
 
-    $(document).on("keypress", function (e) {
-      if (e.charCode == 32)
-        $(document).trigger("game.spacebar");
-    }).on("touchstart", "#spinlocker", function(e){
+    $(document).on("touchstart", "#spinlocker", function(e){
       $(document).trigger("game.spacebar");
     });
 
@@ -423,6 +489,7 @@ $(function(){
       if (spinLock.isPaused) return;
 
       var time = spinLock.timer,
+          missed = true,
           circle_angle_1, circle_angle_2, circles_distance, inverted_circles_distance;
       
       for (var i = 0; i < circles_array.length; i++) {   
@@ -447,19 +514,10 @@ $(function(){
           }
 
           var sync = function(i, j) {
+            missed = false;
             circles_array[i].speed = circles_array[j].speed;
             circles_array[i].angle = circles_array[j].angle;
             circles_array[i].rotationDirection = circles_array[j].rotationDirection;
-            
-            // if (circles_array[i].speed > circles_array[j].speed){
-            //   circles_array[j].speed = circles_array[i].speed;
-            //   circles_array[j].angle = circles_array[i].angle;
-            //   circles_array[j].rotationDirection = circles_array[i].rotationDirection;
-            // } else {
-            //   circles_array[i].speed = circles_array[j].speed;
-            //   circles_array[i].angle = circles_array[j].angle;
-            //   circles_array[i].rotationDirection = circles_array[j].rotationDirection;
-            // }
 
             // Keep trace of synced bloc
             var sync_array_bloc_length = sync_array_bloc.length,
@@ -471,9 +529,9 @@ $(function(){
               else if (sync_array_bloc[idx].indexOf(j) >= 0 ) 
                j_bloc = idx;
             }
- 
+
             if (i_bloc == null && j_bloc == null){
-              sync_array_bloc.push([i, j])
+              sync_array_bloc.push([i, j]);
             } else if (i_bloc != null && j_bloc == null) {
               sync_array_bloc[i_bloc].push(j);
             } else if (j_bloc != null && i_bloc == null) {
@@ -483,26 +541,25 @@ $(function(){
               sync_array_bloc.splice(j_bloc, 1);
             }
 
-           
             // synchronizment circles with circle
             //                circle with blocs
             //                blocs with bloc
-            User.defineScore();
 
+            spinLock.flattenSyncCircles();
+
+            User.defineScore();
 
             // Hilight synchronized circles
             (function(i, j){
               circles_array[i].blurred = true;
               circles_array[j].blurred = true;
-
+            
               setTimeout(function(){ 
                 circles_array[j].blurred = false;
                 circles_array[i].blurred = false }, 1000);
             })(i, j);
           }
           
-          // console.log("DIST ___", circles_array[i].rotationDirection !== circles_array[j].rotationDirection, i, j, circles_distance, inverted_circles_distance)
-
           if ( (Math.abs(circles_distance) < 12 && circles_distance !== 0) ||
                (circles_array[i].rotationDirection !== circles_array[j].rotationDirection && Math.abs(inverted_circles_distance) < 12) )
             sync(i, j);
@@ -511,7 +568,6 @@ $(function(){
       }
       // $(document).trigger("game.togglePause");
       
-      User.defineScore();
       User.last_tap = time;
 
       if (spinLock.is_game_won()) {
@@ -519,7 +575,8 @@ $(function(){
         return;
       }
 
-      spinLock.setCountDown();
+      if (missed)
+        spinLock.setCountDown();
     });
 
     // DEBUG
@@ -565,14 +622,20 @@ $(function(){
      */
     $(document)
     .on("game.gameover", function (e) {
-      $("#gameover").slideDown();
       clearInterval(refresh_interval_id);
       clearInterval(timer_interval);
+      spinLock.introLevel("Failed... :(");
+      setTimeout(function(){
+        $("#gameover").slideDown();
+      });
     })
     .on("game.won", function (e) {
-      $("#won").slideDown();
       clearInterval(refresh_interval_id);
       clearInterval(timer_interval);
+      spinLock.introLevel("Unlocked! ;)");
+      setTimeout(function(){
+        $("#won").slideDown();
+      }, 1200);
     })
     .on("game.nextLevel", function (e) {
       $(document).trigger("game.clearPopin");
@@ -586,11 +649,13 @@ $(function(){
       spinLock.isPaused = !spinLock.isPaused;
     })
     .on("game.new", function (e) {
+      User.reset();
       spinLock.init();
       $(document).trigger("game.clearPopin");
     })
     .on("game.newConfirm", function (e) {
       if (confirm("Cette action supprimera toute progression sur ce niveau. Recommencer?")){
+        User.reset();
         spinLock.currentLevel = 1;
         spinLock.init();
         $(document).trigger("game.clearPopin");
@@ -599,10 +664,12 @@ $(function(){
     .on("game.saveCheckPoint", function (e){
       User.saveCheckPoint();
     })
+    .on("game.trap", function(e, type){
+      spinLock.addTrap(type);
+    })
     .on("debug", function(e){
       debugState();
     });
-
 }); // end $(function(){});
 
 
@@ -628,6 +695,9 @@ game = {
   },
   saveCheckPoint: function(){
     $(document).trigger("game.saveCheckPoint");
+  },
+  addTrap: function(trap){
+    $(document).trigger("game.trap", [trap]);
   }
 }
 
@@ -637,3 +707,9 @@ $(document).ready(function(){
     game.new();
   });
 });
+
+
+
+Array.prototype.diff = function(a) {
+    return this.filter(function(i) {return a.indexOf(i) < 0;});
+};
