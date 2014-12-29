@@ -469,7 +469,6 @@ $(function(){
             //   ctx.fillStyle = ptrn;
             //   ctx.strokeStyle = ptrn;
             // }
-
             ctx.strokeStyle = '#000';
           }
         }
@@ -496,8 +495,12 @@ $(function(){
         //             = circle avancement                        *  (radian to degree conversion) % full rotation
         circle_angle_1 = circles_array[i].calculateRotation(time) * (180 / Math.PI) % 360;
 
+        if (circles_array[i].close) continue;
+
         for (var j = i + 1; j < circles_array.length; j++) {
           
+          if (circles_array[j].close) continue;
+
           circle_angle_2 = circles_array[j].calculateRotation(time) * (180 / Math.PI) % 360;
           circles_distance = inverted_circles_distance = (circle_angle_1 - circle_angle_2) % 360;
 
@@ -561,8 +564,15 @@ $(function(){
           }
           
           if ( (Math.abs(circles_distance) < 12 && circles_distance !== 0) ||
-               (circles_array[i].rotationDirection !== circles_array[j].rotationDirection && Math.abs(inverted_circles_distance) < 12) )
-            sync(i, j);
+               (circles_array[i].rotationDirection !== circles_array[j].rotationDirection && Math.abs(inverted_circles_distance) < 12) ) {
+            if (circles_array[i].death || circles_array[j].death){
+              spinLock.introLevel("DEATH RING");
+              console.log("_DEATH");
+            } else {
+              sync(i, j);
+            }
+          }
+          
 
         }
       }
