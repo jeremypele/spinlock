@@ -151,11 +151,24 @@ $(function(){
         spinLock.setTimer(true);
         sync_array_bloc = [];
       },
+      introLevel: function(text) {
+          context.clearRect(0, 0, canvas.width, canvas.height);
+          context.save();
+
+          context.font = "60px Verdana";
+          context.fillStyle = "black";
+          context.textAlign = "center"; // center horizontally
+          context.textBaseline = "middle"; // vertically 
+          context.fillStyle = "#0094ed";
+          context.shadowColor = "#000000";
+          context.fillText(text, canvas.width / 2, canvas.height / 2 );
+      },
       init: function(){
         spinLock.reset();
         $("#game-screen").show();
 
         var level = spinLock.currentLevel;
+        spinLock.introLevel("Level "+level);
 
         //  > Niveau 1 : 3 cercles, facile / basique (vitesse moyenne basique et taille de l'opening de base) 
         //  > Niveau 2 : 4 cercles, vitesse moyenne +2%, opening -1%
@@ -164,20 +177,23 @@ $(function(){
         //  > Niveau 5 - 10 : 5 cercles, 1 piège aléatoire, vitesse moyenne +2%, opening -1%
         //  > Niveau 11-20 : 5 cercles, 2 pièges aléatoires, vitesse moyenne +2%, opening -1%
         //  > Niveau 21 - infini : vitesse et opening stabilisés. 2 pièges / niveau.
-         
-        console.log("LEVEL => ", level);
-
-        if (spinLock.levels[level])
-          spinLock.levelParams = spinLock.levels[level];
-
-        var number_of_circles = spinLock.levelParams.add_circles + 3;
-        // Update circle size according to current nb_circles
-        toolBox.circleDefault.line_width = Math.floor((( canvas.width * .8 ) / number_of_circles) / 3)
-
-        circles_array = toolBox.createCircles(number_of_circles);
         
-        timer_interval = setInterval(spinLock.setTimer, 1000);
-        refresh_interval_id = setInterval(spinLock.draw, spinLock.interval);
+        // Start game after animation
+        setTimeout(function(){
+          console.log("LEVEL => ", level);
+          if (spinLock.levels[level])
+            spinLock.levelParams = spinLock.levels[level];
+
+          var number_of_circles = spinLock.levelParams.add_circles + 3;
+          // Update circle size according to current nb_circles
+          toolBox.circleDefault.line_width = Math.floor((( canvas.width * .8 ) / number_of_circles) / 3)
+
+          circles_array = toolBox.createCircles(number_of_circles);
+          
+          timer_interval = setInterval(spinLock.setTimer, 1000);
+          refresh_interval_id = setInterval(spinLock.draw, spinLock.interval);
+        }, 1200);
+        
       },
       setCountDown: function(tries){
         User.tries_left = tries || (User.tries_left - 1);
@@ -256,6 +272,7 @@ $(function(){
       }
     }
     
+
     /*
      * Circle object
      */
@@ -314,24 +331,29 @@ $(function(){
         //                circle with bloc
         //                bloc with bloc
 
-        User.score += User.basePoints * combo_coeff * speed_coeff * rapidity_coeff;
-
+        //User.score += User.basePoints * combo_coeff * speed_coeff * rapidity_coeff;
+        User.score += User.basePoints
         User.last_tap = User.last_tap || tapTime;
 
         if (User.max_score < User.score) {
           User.max_score = User.score;
           storage.add('User.max_score', User.max_score);
         }
-          
+
+        User.updateScores();
+         
       },
       saveCheckPoint: function(){
-        if (User.checkPoints == 0)
-          alert('Vous n\'avez plus de checkpoints disponible'); return;
+        if (User.checkPoints == 0) {
+          alert('Vous n\'avez plus de checkpoints disponible'); 
+          return;
+        }
 
         storage.add('Game', {
           currentLevel: spinLock.currentLevel,
           score: User.score
         });
+
         User.checkPoints--;
       }
     }
@@ -465,7 +487,7 @@ $(function(){
             // synchronizment circles with circle
             //                circle with blocs
             //                blocs with bloc
-            defineScore(circle1, circle2);
+            User.defineScore();
 
 
             // Hilight synchronized circles
@@ -479,7 +501,7 @@ $(function(){
             })(i, j);
           }
           
-          //console.log("DIST ___", circles_array[i].rotationDirection !== circles_array[j].rotationDirection, i, j, circles_distance, inverted_circles_distance)
+          // console.log("DIST ___", circles_array[i].rotationDirection !== circles_array[j].rotationDirection, i, j, circles_distance, inverted_circles_distance)
 
           if ( (Math.abs(circles_distance) < 12 && circles_distance !== 0) ||
                (circles_array[i].rotationDirection !== circles_array[j].rotationDirection && Math.abs(inverted_circles_distance) < 12) )
