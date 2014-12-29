@@ -3,6 +3,7 @@ $(function(){
 
     // GLOBALS
     var circles_array = [],
+        sync_array_bloc = [],
         refresh_interval_id,
         timer_interval,
         colors = [ '#FE6203', '#ECC306', '#F87E59', '#F4B174', '#C0B0A3'];
@@ -124,17 +125,20 @@ $(function(){
         4: {
           add_circles: 2,
           max_speed: 4,
-          openingMalus: 1
+          openingMalus: 1,
+          traps: 1
         },
         5: {
           add_circles: 10,
           max_speed: 5,
-          openingMalus: 1
+          openingMalus: 1,
+          traps: 1
         },
         21: {
           add_circles: 4,
           max_speed: 5,
-          openingMalus: 1
+          openingMalus: 1,
+          traps: 2
         }
       },
       currentLevel: 1,
@@ -143,6 +147,9 @@ $(function(){
         clearInterval(refresh_interval_id);
         clearInterval(timer_interval);
         spinLock.isPaused = false;
+        spinLock.setCountDown(5);
+        spinLock.setTimer(true);
+        sync_array_bloc = [];
       },
       init: function(){
         spinLock.reset();
@@ -157,28 +164,27 @@ $(function(){
         //  > Niveau 5 - 10 : 5 cercles, 1 piège aléatoire, vitesse moyenne +2%, opening -1%
         //  > Niveau 11-20 : 5 cercles, 2 pièges aléatoires, vitesse moyenne +2%, opening -1%
         //  > Niveau 21 - infini : vitesse et opening stabilisés. 2 pièges / niveau.
-        // 
+         
         console.log("LEVEL => ", level);
 
         if (spinLock.levels[level])
           spinLock.levelParams = spinLock.levels[level];
 
-        var number_of_circles = Math.floor(spinLock.levelParams.add_circles + 3);
-        
+        var number_of_circles = spinLock.levelParams.add_circles + 3;
         // Update circle size according to current nb_circles
         toolBox.circleDefault.line_width = Math.floor((( canvas.width * .8 ) / number_of_circles) / 3)
 
         circles_array = toolBox.createCircles(number_of_circles);
-        spinLock.setCountDown(5);
-        refresh_interval_id = setInterval(spinLock.draw, spinLock.interval);
         
-        spinLock.setTimer(true);
         timer_interval = setInterval(spinLock.setTimer, 1000);
+        refresh_interval_id = setInterval(spinLock.draw, spinLock.interval);
       },
-      setCountDown: function(try_left){
-        $("#countdown").html(try_left + (try_left > 1 ? " essais" : " essai"));
+      setCountDown: function(tries){
+        User.tries_left = tries || (User.tries_left - 1);
 
-        if (try_left < 1) {
+        $("#countdown").html(User.tries_left + (User.tries_left > 1 ? " essais" : " essai"));
+
+        if (User.tries_left < 1) {
           $(document).trigger("game.gameover");
           return ;
         }
@@ -216,6 +222,25 @@ $(function(){
         });
 
         context.restore();
+      },
+      addTrap: function(){
+        switch(trap){
+          case 'unlock':
+          // > Piège 1 "Un-bind" : 2 cercles se désolidarisent après un temps compris entre 5 et 10 secondes.
+            break;
+          case 'twist':
+          // > Piège 2 "Surprise, motherfck**** !" : un cercle change de sens de roration. Ce changement doit être piégeux, c’est-à-dire opérer moins d'1,5 seconde avant un alignement potentiel
+            break;
+          case 'close':
+          // > Piège 3 "Locked-up !" : Un cercle se referme pour 5 secondes
+            break;
+          case 'ghost':
+          // > Piège 4 "Ghost Ring" : Un cercle disparaît pendant 5 secondes
+            break;
+          case 'death':
+          // > Piège 5 : "Death Ring" : Aligner ce cercle (visuel barbellés avec les autres fait perdre une tentative)
+            break;
+        }
       },
       is_game_won: function() {
         var win_flag = true;
@@ -265,19 +290,56 @@ $(function(){
     var User = {
       last_tap: null,
       score: 0,
+      max_score: 0,
+      tries_left : 5,
+      basePoints: 200,
+      checkPoints: 4,
+      restore: function(){
+        User.max_score = storage.get('User.max_score') || 0 ;
+        User.updateScores();
+
+        User.checkPoints = storage.get('User.checkPoints') || User.checkPoints;
+      },
+      updateScores: function() {
+        $('.score-container score').html(User.score);
+        $('.best-container score').html(User.max_score);
+      },
       defineScore: function(){
         //  scoring: 
-          // speed + combo + vitesse execution (délai précédente tape; au début niveau)
+        var tapTime = spinLock.timer;
 
-          // 200pts * ()
+        // circle speed + combo + vitesse execution (délai précédente tape; au début niveau)
 
+        // synchronizment circle with circle
+        //                circle with bloc
+        //                bloc with bloc
+
+        User.score += User.basePoints * combo_coeff * speed_coeff * rapidity_coeff;
+
+        User.last_tap = User.last_tap || tapTime;
+
+        if (User.max_score < User.score) {
+          User.max_score = User.score;
+          storage.add('User.max_score', User.max_score);
+        }
+          
+      },
+      saveCheckPoint: function(){
+        if (User.checkPoints == 0)
+          alert('Vous n\'avez plus de checkpoints disponible'); return;
+
+        storage.add('Game', {
+          currentLevel: spinLock.currentLevel,
+          score: User.score
+        });
+        User.checkPoints--;
       }
     }
-     
+    User.restore();
+
     /*
      * Drawing ToolBox
      */
-
     function toolBox() {};
     toolBox = {
       circleParts: 12,
@@ -316,7 +378,7 @@ $(function(){
         ctx.lineWidth = options.line_width;
 
         if (typeof options != "undefined" && options.blurred) {// add blur on lock circle to indicate the event
-          ctx.shadowColor = '#00ff00';
+          ctx.shadowColor = '#0099FF';
           ctx.shadowBlur = 5;
           ctx.shadowOffsetX = 0;
           ctx.shadowOffsetY = 0;
@@ -341,10 +403,8 @@ $(function(){
       var time = spinLock.timer,
           circle_angle_1, circle_angle_2, circles_distance, inverted_circles_distance;
       
-      console.log("______________________________________ " );
-
       for (var i = 0; i < circles_array.length; i++) {   
-        //             = circle avancement                        *  radian to degree conversion % full rotation
+        //             = circle avancement                        *  (radian to degree conversion) % full rotation
         circle_angle_1 = circles_array[i].calculateRotation(time) * (180 / Math.PI) % 360;
 
         for (var j = i + 1; j < circles_array.length; j++) {
@@ -352,26 +412,18 @@ $(function(){
           circle_angle_2 = circles_array[j].calculateRotation(time) * (180 / Math.PI) % 360;
           circles_distance = inverted_circles_distance = (circle_angle_1 - circle_angle_2) % 360;
 
+          // If reversed rotations
           if (circles_array[i].rotationDirection !== circles_array[j].rotationDirection) {
-          
-            //console.log("___ " + i + "__" + j , circle_angle_1,  circle_angle_2)
             // Get numbers eloignment
             if (circle_angle_1 < 0 && circle_angle_2 > 0) {
-              //console.log("1 < 2", circle_angle_2 - circle_angle_1)
               inverted_circles_distance = ( 360 - (circle_angle_2 - circle_angle_1) ) % 360
             } else if (circle_angle_1 > 0 && circle_angle_2 < 0) { //polarity inverted
-              //console.log("2 < 1", circle_angle_1 - circle_angle_2)
               inverted_circles_distance = (360 - (circle_angle_1 - circle_angle_2)) % 360
             } else {
-              // console.log("SAME POSNEG")
-              // console.log((Math.abs(circle_angle_1 - circle_angle_2), 360 - (Math.abs(circle_angle_1 - circle_angle_2))))
               inverted_circles_distance = (360 - Math.abs(circle_angle_1 - circle_angle_2)) % 360
             }
-
-            //inverted_circles_distance = 360 - inverted_circles_distance 
-            console.log("__INVERTION", inverted_circles_distance);
           }
-          
+
           var sync = function(i, j) {
             circles_array[i].speed = circles_array[j].speed;
             circles_array[i].angle = circles_array[j].angle;
@@ -386,7 +438,37 @@ $(function(){
             //   circles_array[i].angle = circles_array[j].angle;
             //   circles_array[i].rotationDirection = circles_array[j].rotationDirection;
             // }
+
+            // Keep trace of synced bloc
+            var sync_array_bloc_length = sync_array_bloc.length,
+                i_bloc = null, j_bloc = null;
             
+            for ( var idx = 0; idx<sync_array_bloc_length; idx++ ) {
+              if (sync_array_bloc[idx].indexOf(i) >= 0 )
+                i_bloc = idx;
+              else if (sync_array_bloc[idx].indexOf(j) >= 0 ) 
+               j_bloc = idx;
+            }
+ 
+            if (i_bloc == null && j_bloc == null){
+              sync_array_bloc.push([i, j])
+            } else if (i_bloc != null && j_bloc == null) {
+              sync_array_bloc[i_bloc].push(j);
+            } else if (j_bloc != null && i_bloc == null) {
+              sync_array_bloc[j_bloc].push(i);
+            } else { // Both are not null
+              sync_array_bloc[i_bloc] = sync_array_bloc[i_bloc].concat(sync_array_bloc[j_bloc]);
+              sync_array_bloc.splice(j_bloc, 1);
+            }
+
+           
+            // synchronizment circles with circle
+            //                circle with blocs
+            //                blocs with bloc
+            defineScore(circle1, circle2);
+
+
+            // Hilight synchronized circles
             (function(i, j){
               circles_array[i].blurred = true;
               circles_array[j].blurred = true;
@@ -399,25 +481,23 @@ $(function(){
           
           //console.log("DIST ___", circles_array[i].rotationDirection !== circles_array[j].rotationDirection, i, j, circles_distance, inverted_circles_distance)
 
-          if ( Math.abs(circles_distance) < 12 && circles_distance !== 0)
-            sync(i, j);
-          else if (circles_array[i].rotationDirection !== circles_array[j].rotationDirection && Math.abs(inverted_circles_distance) < 12)
+          if ( (Math.abs(circles_distance) < 12 && circles_distance !== 0) ||
+               (circles_array[i].rotationDirection !== circles_array[j].rotationDirection && Math.abs(inverted_circles_distance) < 12) )
             sync(i, j);
 
         }
       }
       // $(document).trigger("game.togglePause");
       
-      // User.defineScore();
-      // User.last_tap = time;
+      User.defineScore();
+      User.last_tap = time;
 
       if (spinLock.is_game_won()) {
         $(document).trigger("game.won");
         return;
       }
 
-      var countdown = parseInt($("#countdown").html());
-      spinLock.setCountDown(countdown - 1);
+      spinLock.setCountDown();
     });
 
     // DEBUG
@@ -461,8 +541,6 @@ $(function(){
     /*
      * Custom Events
      */
-
-    
     $(document)
     .on("game.gameover", function (e) {
       $("#gameover").slideDown();
@@ -491,9 +569,13 @@ $(function(){
     })
     .on("game.newConfirm", function (e) {
       if (confirm("Cette action supprimera toute progression sur ce niveau. Recommencer?")){
+        spinLock.currentLevel = 1;
         spinLock.init();
         $(document).trigger("game.clearPopin");
       }
+    })
+    .on("game.saveCheckPoint", function (e){
+      User.saveCheckPoint();
     })
     .on("debug", function(e){
       debugState();
@@ -521,6 +603,9 @@ game = {
   },
   debug: function(){
     $(document).trigger("debug");
+  },
+  saveCheckPoint: function(){
+    $(document).trigger("game.saveCheckPoint");
   }
 }
 
